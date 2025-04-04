@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
+  <title>Systematic Reviews Screener</title>
+
+  <style>
+    body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+}
+.content {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+}
+.upload-section {
+  margin-bottom: 20px;
+}
+.results {
+  margin-top: 30px;
+}
+.result-card {
+  border: 1px solid #ddd;
+  padding: 10px;
+  margin-bottom: 15px;
+  text-align: left;
+}
+.error-message {
+  color: red;
+}
+
+#logoutButton {
+  position: fixed; /* Fix the button's position on the screen */
+  top: 20px; /* Distance from the top of the screen */
+  right: 20px; /* Distance from the right edge of the screen */
+  font-size: 12px; 
+  color: white; /* White text color */
+  background-color: rgb(92, 91, 91); /* Bootstrap-like red color for logout */
+  border: none; /* Remove default border */
+  border-radius: 5px; /* Rounded corners */
+  padding: 5px 10px; /* Add padding for a better button size */
+  cursor: pointer; /* Change cursor to pointer on hover */
+  transition: background-color 0.3s ease, box-shadow 0.3s ease; /* Smooth transitions */
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2); /* Subtle shadow effect */
+  z-index: 1000; /* Make sure the button appears on top of other content */
+}
+
+#logoutButton:hover {
+  background-color: rgb(36, 35, 35); /* Darker red on hover */
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.3); /* Slightly stronger shadow on hover */
+}
+
+#logoutButton:focus {
+  outline: none; /* Remove default outline on focus */
+  box-shadow: 0 0 10px rgba(0, 0, 255, 0.6); /* Blue glow on focus */
+}
+
+/* Basic styling for modal */
+.modal {
+  display: none; /* Hide by default */
+  position: fixed;
+  z-index: 9999;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  padding-top: 60px;
+  background-color: rgba(0, 0, 0, 0.5);
+  pointer-events: all; /* Prevent interaction with the modal background */
+}
+
+/* Modal content */
+.modal-content {
+  position: relative;
+  background-color: #fefefe;
+  margin: 5% auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%;
+  pointer-events: all; /* Enable interaction with modal content */
+}
+
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .close:hover,
+    .close:focus {
+      color: black;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    /* Hides the main content until login is successful */
+    .content {
+      display: none;
+    }
+
+    /* Blocking overlay for the entire page */
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5); /* Block background */
+      z-index: 1;
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+  <!-- Main Content (Hidden initially) -->
+  <div class="content">
+    <h1>Welcome to the Systematic Reviews Screener</h1>
+    <!-- Add your content here, for example: -->
+    <p>A tool to assist librarians screen content for systematic reviews.</p>
+  </div>
+
+  <!-- Blocking overlay to disable interaction -->
+  <div class="overlay" id="overlay"></div>
+
+  <!-- Login Modal -->
+  <div id="loginModal" class="modal">
+    <div class="modal-content">   
+      <span class="close" style="display: none;">&times;</span>
+   
+      <!-- Login Form -->
+      <h2>Login</h2>
+      <input type="email" id="email" placeholder="Enter your email" required />
+      <input type="password" id="password" placeholder="Enter your password" required />
+      <button id="loginButton">Login</button>
+    </div>
+  </div>
+
+  <div>
+    <!-- Logout Button (hidden by default) -->
+    <button id="logoutButton">Logout</button>
+      
+    <!-- File Upload Section -->
+    <form id="fileForm">
+      <div class="upload-section">
+        <label for="citationFile">Upload Citation File (RIS format):</label>
+        <input type="file" id="citationFile" accept=".ris,.nbib">
+        <button type="submit" id="submitButton">Submit</button>
+      </div>
+    
+      <!-- Error Message Section -->
+      <div id="errorMessage" class="error-message"></div>
+
+      <!-- Results Section -->
+      <div id="results" class="results">
+      </div>
+    </form>
+  </div>
+  <div id="resultsContainer"></div> <!-- AI results will be shown here -->
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBvdy4lMHPdmB9zTqQxJml4BK1wHfeJX-k",
+  authDomain: "systematic-reviews-scree-56b1f.firebaseapp.com",
+  projectId: "systematic-reviews-scree-56b1f",
+  storageBucket: "systematic-reviews-scree-56b1f.firebasestorage.app",
+  messagingSenderId: "100084413171",
+  appId: "1:100084413171:web:a22575339ab7aabbd77d86"
+};
+
+// Initialize Firebase
+
+    const firebaseApp = initializeApp(firebaseConfig);
+    const auth = getAuth(firebaseApp);
+    const db = getFirestore(firebaseApp);
+
+    // Get references to modal elements
+    const modal = document.getElementById("loginModal");
+    const closeModal = document.querySelector("#loginModal .close");
+    const loginButton = document.getElementById("loginButton");
+    const logoutButton = document.getElementById("logoutButton");
+    const loginForm = document.querySelector('.modal-content');
+    const content = document.querySelector('.content');
+    const overlay = document.getElementById("overlay");
+
+    const version = new Date().getTime();
+    // Show modal when the page loads (if not logged in)
+
+    document.addEventListener("DOMContentLoaded", function () {
+    window.onload = function () {
+      const citationFileInput = document.getElementById('citationFile');
+      if (citationFileInput) {
+        // Proceed with file processing
+        citationFileInput.addEventListener('change', function (e) {
+          const files = e.target.files;
+          console.log(files);
+        });
+      }
+    };
+  })
+    // Close modal when the close (X) button is clicked
+    closeModal.addEventListener("click", () => {
+      modal.style.display = "none";
+      overlay.style.display = "none";  // Hide overlay when modal is closed
+    });
+
+// Check if user is logged in or not
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        console.log("User is signed in:", user);
+        loginForm.style.display = "none";  // Hide login form
+        logoutButton.style.display = "inline";  // Show logout button
+        content.style.display = "block"; // Show main content after login
+        modal.style.display = "none";  // Hide login modal
+        overlay.style.display = "none";  // Hide overlay once logged in
+    } else {
+        console.log("No user is signed in.");
+        loginForm.style.display = "block";  // Show login form
+        logoutButton.style.display = "none";  // Hide logout button
+        content.style.display = "none"; // Hide content until login
+        overlay.style.display = "block";  // Block access to content
+        showLoginModal();  // Show login modal if no user is signed in
+    }
+});
+
+
+    // Login event listener
+    loginButton.addEventListener("click", async () => {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+
+  if (!email || !password) {
+    alert("Please enter both email and password.");
+    return;
+  }
+
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    console.log("User logged in:", userCredential.user);
+  } catch (error) {
+    console.error("Error during login: ", error.message);
+    alert("Login failed: " + error.message);
+  }
+});
+
+    // Event listener for logout
+    logoutButton.addEventListener("click", async () => {
+  try {
+    // Sign the user out from Firebase
+    await signOut(auth);
+    console.log("User logged out");
+
+    // Clear the input fields (email and password) when the user logs out
+    document.getElementById("email").value = "";  // Clear the email field
+    document.getElementById("password").value = "";  // Clear the password field
+
+    // Hide the current page content (or reset any UI elements)
+    document.body.style.overflow = "auto"; // Re-enable scrolling if disabled during login
+
+    // Reset the login modal visibility and other UI elements
+    showLoginModal(); // Call the function to show the login modal
+  } catch (error) {
+    console.error("Error during logout: ", error.message);
+    alert("Logout failed: " + error.message);
+  }
+});
+
+    // Function to show the login modal again
+    function showLoginModal() {
+  // Show the login modal (assuming it's initially hidden)
+  document.getElementById("loginModal").style.display = "block";
+  
+  // Optionally, hide other page elements or reset the page
+  document.getElementById("logoutButton").style.display = "none";
+  document.getElementById("loginButton").style.display = "inline";
+}
+ document.getElementById('fileForm').addEventListener('submit', function(event) {
+    event.preventDefault(); // Prevent page reload
+
+    const fileInput = document.getElementById('citationFile');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert('Please upload a file first.');
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function(event) {
+        const fileContent = event.target.result;
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = ''; // Clear previous results
+
+        const formattedData = parseRIS(fileContent);
+        
+        formattedData.forEach(citation => {
+            const resultCard = document.createElement('div');
+            resultCard.classList.add('result-card');
+
+            resultCard.innerHTML = `
+                <h3>Article Title: ${citation.title || "N/A"}</h3>
+                <p><strong>Authors:</strong> ${citation.authors || "N/A"}</p>
+                <p><strong>Journal:</strong> ${citation.journal || "N/A"}</p>
+                <p><strong>Volume:</strong> ${citation.volume || "N/A"}; 
+                   <strong>Issue:</strong> ${citation.issue || "N/A"}; 
+                   <strong>Pages:</strong> ${citation.pages || "N/A"}; 
+                   <strong>Year:</strong> ${citation.year || "N/A"}
+                </p>
+            `;
+
+            resultsDiv.appendChild(resultCard);
+        });
+    };
+
+    reader.readAsText(file);
+});
+
+/**
+ * Parses an RIS file and extracts key citation details.
+ * @param {string} fileContent - The content of the RIS file.
+ * @returns {Array} - An array of extracted citations.
+ */
+ function parseRIS(fileContent) {
+    const records = fileContent.split(/\n(?=TY  - )/); // Ensure proper record separation
+    const citations = [];
+
+    records.forEach(record => {
+        const lines = record.split("\n").map(line => line.trim()); // Split into lines and trim spaces
+        let title = "N/A";
+        let authors = [];
+        let journal = "N/A";
+        let volume = "N/A";
+        let issue = "N/A";
+        let pages = "N/A";
+        let year = "N/A";
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+
+            if (line.startsWith("TI  - ")) {
+                title = line.replace("TI  - ", "").trim();
+            } else if (line.startsWith("AU  - ")) {
+                authors.push(line.replace("AU  - ", "").trim());
+            } else if (line.startsWith("VL  - ")) {
+                volume = line.replace("VL  - ", "").trim();
+            } else if (line.startsWith("IS  - ")) {
+                issue = line.replace("IS  - ", "").trim();
+            } else if (line.startsWith("SP  - ")) {
+                pages = line.replace("SP  - ", "").trim();
+            } else if (line.startsWith("PY  - ")) {
+                year = line.replace("PY  - ", "").trim();
+            } else if (i > 0 && lines[i + 1] && lines[i + 1].startsWith("PY  - ")) {
+                // If the next line is "PY  -", assume this line is the journal name
+                journal = line.trim();
+            }
+        }
+
+        citations.push({
+            title: title,
+            authors: authors.length > 0 ? authors.join(", ") : "N/A",
+            journal: journal,
+            volume: volume,
+            issue: issue,
+            pages: pages,
+            year: year
+        });
+    });
+
+    return citations;
+}
+
+function displayResults(citations) {
+   const resultsDiv = document.getElementById('results');
+   resultsDiv.innerHTML = ''; // Clear previous results
+   citations.forEach((citation, index) => {
+      const resultCard = document.createElement('div');
+      resultCard.classList.add('result-card');
+      resultCard.innerHTML = `
+         <h3>Article Title: ${citation.title || "N/A"}</h3>
+         <p><strong>Authors:</strong> ${citation.authors || "N/A"}</p>
+         <p><strong>Journal:</strong> ${citation.journal || "N/A"}</p>
+         <p><strong>Volume:</strong> ${citation.volume || "N/A"}; 
+            <strong>Issue:</strong> ${citation.issue || "N/A"}; 
+            <strong>Pages:</strong> ${citation.pages || "N/A"}; 
+            <strong>Year:</strong> ${citation.year || "N/A"}
+         </p>
+      `;
+      resultsDiv.appendChild(resultCard);
+   });
+}
+
+document.getElementById("submitButton").addEventListener("click", async function () {
+    const fileInput = document.getElementById("citationFile");
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert("Please select a file before submitting.");
+        return;
+    }
+
+    let formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch("http://localhost:8000/upload", {
+    method: "POST",
+    body: formData,
+});
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log("Server Response:", result);
+
+        if (result.success) {
+            displayAIResults(result.results);
+        } else {
+            alert("Error: " + result.message);
+        }
+    } catch (error) {
+        console.error("Upload error:", error);
+        alert("Failed to process the file. Error: " + error.message);
+    }
+});
+
+function displayAIResults(results) {
+    const resultsContainer = document.getElementById("resultsContainer");
+    resultsContainer.innerHTML = ""; // Clear previous results
+
+    if (Array.isArray(results) && results.length > 0) {
+        results.forEach(record => {
+            const div = document.createElement("div");
+            div.className = "result-card";
+            div.innerHTML = `
+                <strong>Title:</strong> ${record.title}<br>
+                <strong>AI Classification:</strong> <span class="classification">${record.classification}</span>
+            `;
+            resultsContainer.appendChild(div);
+        });
+    } else {
+        resultsContainer.innerHTML = "<p>No results to display.</p>";
+    }
+}
+
+// Save data function
+async function saveData(data) {
+        try {
+            // Create a reference to a Firestore collection
+            const docRef = await addDoc(collection(db, "reviews"), {
+                ...data // Add your data to the Firestore document
+            });
+            console.log("Document written with ID: ", docRef.id);
+        } catch (e) {
+            console.error("Error adding document: ", e);
+        }
+    }
+
+    // Example call to saveData function
+    const reviewData = {
+        title: "Review of Paper A",
+        category: "Include",
+        searchTermOccurrences: 3
+    };
+
+    saveData(reviewData);
+
+    // Function to get all reviews
+    const getReviews = async () => {
+        const reviewsCol = collection(db, "reviews");
+        const querySnapshot = await getDocs(reviewsCol);
+        querySnapshot.forEach((doc) => {
+            console.log(doc.id, " => ", doc.data());
+        });
+    };
+
+    // Function to get reviews by category
+    const getReviewsByCategory = async (category) => {
+        const reviewsCol = collection(db, "reviews");
+        const q = query(reviewsCol, where("category", "==", category));
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach((doc) => {
+            console.log(doc.id, " => ", doc.data());
+        });
+    };
+
+    // Real-time listener for reviews
+    const getReviewsRealTime = () => {
+        const reviewsCol = collection(db, "reviews");
+        onSnapshot(reviewsCol, (querySnapshot) => {
+            querySnapshot.forEach((doc) => {
+                console.log(doc.id, " => ", doc.data());
+            });
+        });
+    };
+
+  </script>
+
+</body>
+
+</html>
