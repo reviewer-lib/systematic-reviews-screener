@@ -7,7 +7,11 @@ const axios = require('axios');
 const dotenv = require('dotenv');
 const torch = require('@tensorflow/tfjs-node');  // TensorFlow.js for Node.js
 const { BertTokenizer, BertForSequenceClassification } = require('transformers');  // TensorFlow.js equivalent for Huggingface
+
+// Load environment variables from .env
 dotenv.config();
+
+const apiKey = process.env.GOOGLE_API_KEY; // Access the API key from environment variable
 
 // Initialize Firebase Admin SDK
 initializeApp({
