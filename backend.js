@@ -11,7 +11,8 @@ const { BertTokenizer, BertForSequenceClassification } = require('transformers')
 // Load environment variables from .env
 dotenv.config();
 
-const apiKey = process.env.GOOGLE_API_KEY; // Access the API key from environment variable
+const apiKey = process.env.API_KEY;
+const googleApiKey = process.env.GOOGLE_API_KEY;
 
 // Initialize Firebase Admin SDK
 initializeApp({
